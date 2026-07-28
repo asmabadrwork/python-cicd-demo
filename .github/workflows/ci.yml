@@ -62,12 +62,14 @@ jobs:
 
       max-image-size-mb: "500"
 
-    secrets: inherit
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
   deploy:
     needs: python-ci
     runs-on: ubuntu-latest
-
     if: github.ref == 'refs/heads/main'
 
     steps:
