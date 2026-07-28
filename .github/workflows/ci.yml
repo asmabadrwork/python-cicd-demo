@@ -45,11 +45,11 @@ jobs:
       sonar-exclusions: "venv/**,__pycache__/**,.github/**"
 
       sonar-args: >
-         -Dsonar.sources=app.py
-         -Dsonar.tests=tests
-         -Dsonar.test.inclusions=tests/**
-         -Dsonar.python.coverage.reportPaths=coverage.xml
-         -Dsonar.python.xunit.reportPath=test-results.xml
+        -Dsonar.sources=app.py
+        -Dsonar.tests=tests
+        -Dsonar.test.inclusions=tests/**
+        -Dsonar.python.coverage.reportPaths=coverage.xml
+        -Dsonar.python.xunit.reportPath=test-results.xml
 
       enable-trivy-fs: true
       enable-trivy-image: true
@@ -71,6 +71,7 @@ jobs:
   deploy:
     needs: python-ci
     runs-on: ubuntu-latest
+
     if: github.ref == 'refs/heads/main'
 
     steps:
@@ -95,3 +96,38 @@ jobs:
               --name flask-app \
               -p 5000:5000 \
               asmabadrwork/python-cicd-demo:${{ github.sha }}
+
+  push-to-ecr:
+    needs: deploy
+    runs-on: ubuntu-latest
+
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker Image
+        run: |
+          docker build -t python-cicd-demo:${{ github.sha }} .
+
+      - name: Tag Docker Image
+        run: |
+          docker tag python-cicd-demo:${{ github.sha }} \
+          ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/python-cicd-demo:${{ github.sha }}
+
+      - name: Push Docker Image to Amazon ECR
+        run: |
+          docker push \
+          ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/python-cicd-demo:${{ github.sha }}
