@@ -42,15 +42,11 @@ jobs:
       enable-sonarqube: true
       sonar-project-key: "python-cicd-demo"
 
-      # ✅ Scan only the application source
-      sonar-sources: "app.py"
-
-      # ✅ Exclude tests from source analysis
-      sonar-exclusions: "venv/**,__pycache__/**,.github/**,tests/**"
+      sonar-exclusions: "venv/**,__pycache__/**,.github/**"
 
       sonar-args: >
+        -Dsonar.projectName="Python CI/CD Demo"
         -Dsonar.tests=tests
-        -Dsonar.test.inclusions=tests/**
         -Dsonar.python.coverage.reportPaths=coverage.xml
         -Dsonar.python.xunit.reportPath=test-results.xml
 
@@ -74,7 +70,6 @@ jobs:
   deploy:
     needs: python-ci
     runs-on: ubuntu-latest
-
     if: github.ref == 'refs/heads/main'
 
     steps:
