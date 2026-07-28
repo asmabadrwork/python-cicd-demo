@@ -9,30 +9,56 @@ on:
       - main
 
 jobs:
-  # 1. CI / SAST / Test / Docker Build & Push (Shared Workflow)
+  # 1. CI / SAST / Unit Tests / Docker Build (Shared Workflow)
   python-ci:
     uses: vishuops0210/shared-repo/.github/workflows/ci-python.yml@main
     with:
-      python-version: "3.12"
+      python-version: '3.12'
+
       enable-gitleaks: true
+      gitleaks-fetch-depth: '10'
+
       enable-unit-tests: true
-      install-command: "pip install pytest pytest-cov && if [ -f requirements.txt ]; then pip install -r requirements.txt; fi"
-      test-command: "pytest tests/ --cov=. --cov-report=xml:coverage.xml --junitxml=test-results.xml"
-      sonar-project-key: "python-cicd-demo"
-      sonar-exclusions: "venv/**,__pycache__/**,.github/**"
-      sonar-args: "-Dsonar.sources=app.py -Dsonar.tests=tests -Dsonar.python.coverage.reportPaths=coverage.xml -Dsonar.python.xunit.reportPath=test-results.xml"
-      docker-repository: "python-cicd-demo"
+      install-command: |
+        if [ ! -d ".venv" ]; then python -m venv .venv; fi
+        source .venv/bin/activate
+        python -m pip install --upgrade pip
+        pip install pytest pytest-cov
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      test-command: |
+        source .venv/bin/activate
+        pytest tests/ --cov=. --cov-report=xml:coverage.xml --cov-report=term-missing --junitxml=test-results.xml
+
+      enable-sonarqube: true
+      sonar-project-key: 'python-cicd-demo'
+      sonar-exclusions: 'venv/**,__pycache__/**,.github/**'
+      sonar-args: >
+        -Dsonar.sources=app.py
+        -Dsonar.tests=tests
+        -Dsonar.test.inclusions=tests/**
+        -Dsonar.python.coverage.reportPaths=coverage.xml
+        -Dsonar.python.xunit.reportPath=test-results.xml
+
+      enable-trivy-fs: true
+      enable-trivy-image: true
+
+      enable-docker-build: true
+      enable-docker-push: true
+      enable-image-size-check: true
+
+      docker-repository: 'python-cicd-demo'
       docker-tag: ${{ github.sha }}
-      max-image-size-mb: "500"
-    secrets: inherit
+      max-image-size-mb: '500'
+
+    secrets: inherit  # <--- Automatically passes SONAR_TOKEN, DOCKERHUB_USERNAME, DOCKERHUB_TOKEN
 
   # 2. Deploy to EC2
   deploy:
     needs: python-ci
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
-      - name: Deploy to EC2 via SSH
+      - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -40,16 +66,20 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
-            docker pull asmabadrwork/python-cicd-demo:${{ github.sha }}
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/python-cicd-demo:${{ github.sha }}
             docker stop flask-app || true
             docker rm flask-app || true
-            docker run -d --restart always --name flask-app -p 5000:5000 asmabadrwork/python-cicd-demo:${{ github.sha }}
+            docker run -d \
+              --restart always \
+              --name flask-app \
+              -p 5000:5000 \
+              ${{ secrets.DOCKERHUB_USERNAME }}/python-cicd-demo:${{ github.sha }}
 
-  # 3. Retag & Push to ECR (Without Rebuilding!)
+  # 3. Push Image to ECR (Reuses Docker Hub image instead of re-building)
   push-to-ecr:
     needs: python-ci
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -62,11 +92,11 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Pull from Docker Hub & Push to ECR
+      - name: Pull from Docker Hub, Tag & Push to ECR
         run: |
-          DOCKER_HUB_IMAGE="asmabadrwork/python-cicd-demo:${{ github.sha }}"
+          DOCKER_HUB_IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/python-cicd-demo:${{ github.sha }}"
           ECR_IMAGE="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/python-cicd-demo:${{ github.sha }}"
-          
+
           docker pull $DOCKER_HUB_IMAGE
           docker tag $DOCKER_HUB_IMAGE $ECR_IMAGE
           docker push $ECR_IMAGE
