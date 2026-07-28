@@ -45,10 +45,11 @@ jobs:
       sonar-exclusions: "venv/**,__pycache__/**,.github/**"
 
       sonar-args: >
-        -Dsonar.projectName="Python CI/CD Demo"
-        -Dsonar.tests=tests
-        -Dsonar.python.coverage.reportPaths=coverage.xml
-        -Dsonar.python.xunit.reportPath=test-results.xml
+         -Dsonar.sources=app.py
+         -Dsonar.tests=tests
+         -Dsonar.test.inclusions=tests/**
+         -Dsonar.python.coverage.reportPaths=coverage.xml
+         -Dsonar.python.xunit.reportPath=test-results.xml
 
       enable-trivy-fs: true
       enable-trivy-image: true
