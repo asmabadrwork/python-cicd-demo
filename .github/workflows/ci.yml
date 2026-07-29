@@ -48,7 +48,7 @@ jobs:
 
       # --- ECR PUSH TOGGLE ---
       enable-ecr-push: true
-      aws-region: 'us-east-1' # Replace with your AWS Region
+      aws-region: 'ap-south-1' # Replace with your AWS Region
 
       docker-repository: 'python-cicd-demo'
       docker-tag: ${{ github.sha }}
