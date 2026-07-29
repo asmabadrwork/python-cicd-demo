@@ -27,11 +27,7 @@ jobs:
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
       test-command: |
         source .venv/bin/activate
-        python -m pytest tests/ \
-          --cov=. \
-          --cov-report=xml:coverage.xml \
-          --cov-report=term-missing \
-          --junitxml=test-results.xml
+        PYTHONPATH=. pytest tests/ --cov=. --cov-report=xml:coverage.xml --cov-report=term-missing --junitxml=test-results.xml
 
       enable-sonarqube: true
       sonar-project-key: 'python-cicd-demo'
@@ -50,6 +46,10 @@ jobs:
       enable-docker-push: true
       enable-image-size-check: true
 
+      # --- ECR PUSH TOGGLE ---
+      enable-ecr-push: true
+      aws-region: 'us-east-1' # Replace with your AWS Region
+
       docker-repository: 'python-cicd-demo'
       docker-tag: ${{ github.sha }}
       max-image-size-mb: '500'
@@ -58,50 +58,6 @@ jobs:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-
-  deploy:
-    needs: python-ci
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    steps:
-      - name: Deploy to EC2
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/python-cicd-demo:${{ github.sha }}
-            docker stop flask-app || true
-            docker rm flask-app || true
-            docker run -d \
-              --restart always \
-              --name flask-app \
-              -p 5000:5000 \
-              ${{ secrets.DOCKERHUB_USERNAME }}/python-cicd-demo:${{ github.sha }}
-
-  push-to-ecr:
-    needs: python-ci
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    steps:
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Pull from Docker Hub, Tag & Push to ECR
-        run: |
-          DOCKER_HUB_IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/python-cicd-demo:${{ github.sha }}"
-          ECR_IMAGE="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/python-cicd-demo:${{ github.sha }}"
-
-          docker pull $DOCKER_HUB_IMAGE
-          docker tag $DOCKER_HUB_IMAGE $ECR_IMAGE
-          docker push $ECR_IMAGE
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
