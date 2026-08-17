@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: python-cicd-demo-service
+  namespace: default
+spec:
+  type: ClusterIP
+  selector:
+    app: python-cicd-demo
+  ports:
+    - port: 80
+      targetPort: 5000
