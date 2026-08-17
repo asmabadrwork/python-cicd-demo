@@ -65,6 +65,8 @@ jobs:
     needs: python-ci
     if: github.ref == 'refs/heads/main' && success()
     runs-on: ubuntu-latest
+    permissions:
+      contents: write 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
