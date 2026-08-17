@@ -14,10 +14,8 @@ jobs:
     uses: vishuops0210/shared-repo/.github/workflows/ci-python.yml@main
     with:
       python-version: '3.12'
-
       enable-gitleaks: true
       gitleaks-fetch-depth: '10'
-
       enable-unit-tests: true
       install-command: |
         if [ ! -d ".venv" ]; then python -m venv .venv; fi
@@ -46,9 +44,8 @@ jobs:
       enable-docker-push: true
       enable-image-size-check: true
 
-      # --- ECR PUSH TOGGLE ---
       enable-ecr-push: true
-      aws-region: 'ap-south-1' # Replace with your AWS Region
+      aws-region: 'ap-south-1'
 
       docker-repository: 'python-cicd-demo'
       docker-tag: ${{ github.sha }}
@@ -61,3 +58,24 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+
+  # --- CONTINUOUS DELIVERY (CD) TRIGGER ---
+  update-cd-manifest:
+    name: Update K8s Manifest for CD
+    needs: python-ci
+    if: github.ref == 'refs/heads/main' && success()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Update Image Tag in k8s/deployment.yaml
+        run: |
+          sed -i "s|image: .*|image: ${{ secrets.DOCKERHUB_USERNAME }}/python-cicd-demo:${{ github.sha }}|g" k8s/deployment.yaml
+
+      - name: Commit and Push K8s Manifest
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore(cd): update image tag to ${{ github.sha }}"
+          git push
