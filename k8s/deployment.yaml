@@ -17,6 +17,6 @@ spec:
     spec:
       containers:
       - name: python-app
-        image: asmabadrwork/python-cicd-demo:latest
+        image: asmabadrwork/python-cicd-demo:f30a0cc73dce13311ff9a89d199b86b540115441
         ports:
         - containerPort: 5000
