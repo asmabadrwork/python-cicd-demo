@@ -10,6 +10,7 @@ on:
       - uat
 
 jobs:
+  # --- 1. CONTINUOUS INTEGRATION (CI) ---
   python-ci:
     uses: vishuops0210/shared-repo/.github/workflows/ci-python.yml@main
     with:
@@ -58,26 +59,28 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-      DASHBOARD_TOKEN: ${{ secrets.DASHBOARD_TOKEN || secrets.GITHUB_TOKEN }} 
+      DASHBOARD_TOKEN: ${{ secrets.DASHBOARD_TOKEN || secrets.GITHUB_TOKEN }}
 
+  # --- 2. CONTINUOUS DELIVERY (CD GITOPS TRIGGER) ---
   update-cd-manifest:
-    name: Update K8s Manifest for CD
+    name: Update Helm values.yaml for GitOps CD
     needs: python-ci
     if: github.ref == 'refs/heads/main' && success()
     runs-on: ubuntu-latest
-    permissions:
-      contents: write 
     steps:
-      - name: Checkout Code
+      - name: Checkout gitops-manifests Repo
         uses: actions/checkout@v4
+        with:
+          repository: 'asmabadrwork/gitops-manifests'
+          token: ${{ secrets.MANIFEST_REPO_TOKEN }}
 
-      - name: Update Image Tag in k8s/deployment.yaml
+      - name: Update Tag in apps/python-app/values.yaml
         run: |
-          sed -i "s|image: .*|image: ${{ secrets.DOCKERHUB_USERNAME }}/python-cicd-demo:${{ github.sha }}|g" k8s/deployment.yaml
+          sed -i "s|tag: .*|tag: ${{ github.sha }}|g" apps/python-app/values.yaml
 
-      - name: Commit and Push K8s Manifest
+      - name: Commit and Push to Manifest Repo
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git commit -am "chore(cd): update image tag to ${{ github.sha }}"
+          git commit -am "chore(cd): auto-update python-app image tag to ${{ github.sha }}"
           git push
